@@ -3,3 +3,5 @@ Copyright 2026 Algomation
 
 This product converts Power Automate flow definitions into UAPF packages.
 Power Automate is a trademark of Microsoft Corporation; this project is not affiliated with Microsoft.
+
+schemas/uapf-2.5.0/ are copied from https://github.com/UAPFormat/UAPF-specification (version 2.5.0, MIT License, Copyright (c) 2025 Algomation).

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uapf.dev/schemas/lifecycle.schema.json",
+  "title": "UAPF Lifecycle Metadata Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "status"],
+  "properties": {
+    "kind": { "type": "string", "enum": ["uapf.metadata.lifecycle"] },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "deprecated", "retired"]
+    },
+    "created": { "type": "string", "format": "date-time" },
+    "lastModified": { "type": "string", "format": "date-time" },
+    "approvedAt": { "type": "string", "format": "date-time" },
+    "approvedBy": { "type": "string" },
+    "deprecatedAt": { "type": "string", "format": "date-time" },
+    "retirementDate": { "type": "string", "format": "date" },
+    "supersededBy": {
+      "type": "string",
+      "pattern": "^(package:|\\.\\.?/)[^\\s]+$",
+      "description": "Reference to replacement package if deprecated"
+    },
+    "changeHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["version", "date", "summary"],
+        "properties": {
+          "version": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "summary": { "type": "string" },
+          "author": { "type": "string" }
+        }
+      }
+    }
+  }
+}

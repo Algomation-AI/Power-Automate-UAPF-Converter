@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Automate to UAPF converter</title>
+<meta name="description" content="Convert Power Automate flows into open UAPF process packages: BPMN diagrams, connector settings and a fidelity report. Open source, Apache-2.0.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/bpmn/assets/diagram-js.css">
+<link rel="stylesheet" href="vendor/bpmn/assets/bpmn-js.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <a class="mark" href="./" aria-label="Power Automate to UAPF converter, start over">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="11" width="10" height="10" rx="2.5"/><path d="M19 16l5-5 5 5-5 5z"/><path d="M13 16h6"/></svg>
+    <span>pa2uapf</span>
+  </a>
+  <nav class="links">
+    <a href="https://github.com/algomation/Power-Automate-UAPF-Converter">Source on GitHub</a>
+    <a href="https://github.com/UAPFormat/UAPF-specification">UAPF specification</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Turn Power Automate flows into open BPMN processes.</h1>
+    <p class="lede">Drop a solution export or a single flow definition. You get a UAPF package: the process as a BPMN diagram, every expression and connector setting kept, and a report of what converted exactly and what needs a person.</p>
+
+    <label class="drop" id="drop" tabindex="0">
+      <input type="file" id="file" accept=".zip,.json" hidden>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 31V11m0 0-8 8m8-8 8 8"/><path d="M9 30v6a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3v-6"/></svg>
+      <span class="drop-main">Drop a <b>solution .zip</b>, a <b>package .zip</b> or a <b>flow .json</b></span>
+      <span class="drop-sub">or click to choose a file (up to 10 MB)</span>
+    </label>
+
+    <div class="samples">
+      <span>No export at hand? Convert a sample:</span>
+      <div id="samples" class="sample-list"></div>
+    </div>
+    <p class="privacy">Files are converted in memory and discarded. Nothing is stored, logged or shared; the result is downloaded straight to your browser.</p>
+  </section>
+
+  <div class="status" id="status" role="status" aria-live="polite" hidden></div>
+
+  <section class="result" id="result" hidden>
+    <div class="res-head">
+      <div class="res-title">
+        <h2 id="resName"></h2>
+        <p id="resMeta" class="res-meta"></p>
+      </div>
+      <button class="btn" id="download">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+        <span>Download .uapf</span>
+      </button>
+    </div>
+
+    <figure class="fidelity">
+      <div class="bar" id="bar" role="img"></div>
+      <figcaption id="barLegend" class="legend"></figcaption>
+    </figure>
+    <p class="valid" id="valid"></p>
+
+    <div class="tabs" id="tabs" role="tablist"></div>
+
+    <div class="split">
+      <aside class="pa" aria-label="The flow as Power Automate shows it">
+        <h3>In Power Automate</h3>
+        <p class="hint" id="trigger"></p>
+        <ol class="outline" id="outline"></ol>
+      </aside>
+      <div class="uapf">
+        <div class="uapf-head">
+          <h3>As a UAPF process</h3>
+          <p class="hint">Hover an action on the left to see where it went. Click any step for its settings.</p>
+        </div>
+        <div class="canvas-wrap">
+          <div id="canvas" class="canvas"></div>
+          <div class="zoom">
+            <button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Fit diagram">Fit</button>
+          </div>
+          <aside class="step" id="step" hidden>
+            <button class="step-x" id="stepX" aria-label="Close step details">×</button>
+            <div id="stepBody"></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <section class="report">
+      <div class="report-head">
+        <h3>Conversion report</h3>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl" id="rows"></table></div>
+    </section>
+
+    <section class="files">
+      <h3>Package contents</h3>
+      <div class="files-grid">
+        <ul id="fileList" class="file-list"></ul>
+        <pre id="filePreview" class="file-preview" tabindex="0"></pre>
+      </div>
+    </section>
+  </section>
+
+  <section class="how">
+    <h2>What the converter does</h2>
+    <div class="how-grid">
+      <div>
+        <h3>Structure becomes BPMN</h3>
+        <p>Triggers, conditions, switches, loops, parallel branches and try/catch scopes become start events, gateways and sequence flows that any BPMN tool can open.</p>
+      </div>
+      <div>
+        <h3>Logic stays in the package</h3>
+        <p>Every expression and connector parameter is copied verbatim into the step's settings. Nothing about the flow is left for the runtime to know.</p>
+      </div>
+      <div>
+        <h3>Connectors become capabilities</h3>
+        <p>SharePoint, Outlook, Teams, HTTP and the rest map to generic capabilities such as <code>sharepoint.get-items@1</code>, so any UAPF-IP agent that offers them can run the process.</p>
+      </div>
+      <div>
+        <h3>Nothing is hidden</h3>
+        <p>Each action is reported as exact, approximated or manual, with the reason. Approvals that wait for days and AI Builder prompts are flagged, not guessed.</p>
+      </div>
+    </div>
+    <p class="foot">Open source under Apache-2.0. Run it on your own servers with <code>docker run</code> or as a command-line tool: <code>pa2uapf MySolution.zip</code>.</p>
+  </section>
+</main>
+
+<script src="vendor/bpmn/bpmn-navigated-viewer.production.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

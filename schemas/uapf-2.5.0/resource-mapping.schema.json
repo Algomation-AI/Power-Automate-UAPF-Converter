@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uapf.dev/schemas/resource-mapping.schema.json",
+  "title": "UAPF Resource Mapping (resources/mappings.yaml) Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "targets", "bindings"],
+  "properties": {
+    "kind": { "type": "string", "enum": ["uapf.resources.mapping"] },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/target" }
+    },
+    "bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/binding" }
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "type": { "type": "string", "enum": ["ai_agent", "human_role", "system_api", "mcp_tool", "external_service"] },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Declared capabilities of this target"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "URI or reference for invocation"
+        },
+        "authentication": {
+          "type": "object",
+          "properties": {
+            "method": { "type": "string", "enum": ["none", "api_key", "oauth2", "did", "mtls"] },
+            "configRef": { "type": "string", "description": "Reference to credential configuration" }
+          }
+        },
+        "availability": {
+          "type": "object",
+          "properties": {
+            "schedule": { "type": "string", "description": "Cron expression or 'always'" },
+            "timezone": { "type": "string", "default": "UTC" }
+          }
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "targetId"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "ref"],
+          "properties": {
+            "type": { "type": "string", "enum": ["bpmn.task", "bpmn.serviceTask", "bpmn.userTask", "bpmn.businessRuleTask", "bpmn.sendTask", "bpmn.receiveTask", "dmn.decision", "cmmn.task", "cmmn.humanTask", "cmmn.processTask"] },
+            "ref": { "type": "string", "minLength": 1, "description": "Element ID from BPMN/DMN/CMMN" }
+          }
+        },
+        "targetId": { "type": "string", "minLength": 1 },
+        "mode": {
+          "type": "string",
+          "enum": ["manual", "assisted", "autonomous", "supervised"],
+          "default": "assisted",
+          "description": "manual=human only, assisted=AI suggests/human approves, autonomous=AI executes, supervised=AI executes with monitoring"
+        },
+        "contract": {
+          "type": "object",
+          "description": "Input/output contract for this binding",
+          "properties": {
+            "input": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/contractParam" }
+            },
+            "output": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/contractParam" }
+            },
+            "timeout": {
+              "type": "string",
+              "pattern": "^[0-9]+(s|m|h|d)$",
+              "description": "Timeout duration, e.g., '30s', '5m', '1h'"
+            },
+            "retries": {
+              "type": "object",
+              "properties": {
+                "maxAttempts": { "type": "integer", "minimum": 0, "default": 3 },
+                "backoffMs": { "type": "integer", "minimum": 0, "default": 1000 }
+              }
+            }
+          }
+        },
+        "fallback": {
+          "type": "object",
+          "description": "Fallback handling when primary target fails",
+          "properties": {
+            "targetId": { "type": "string", "description": "Fallback target ID" },
+            "escalationPath": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Ordered list of target IDs for escalation"
+            },
+            "onTimeout": { "type": "string", "enum": ["escalate", "retry", "fail", "skip"] },
+            "onError": { "type": "string", "enum": ["escalate", "retry", "fail", "skip"] }
+          }
+        },
+        "requiredCapabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Capabilities the target must have for this binding"
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "contractParam": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["string", "number", "boolean", "object", "array", "any"] },
+        "required": { "type": "boolean", "default": true },
+        "description": { "type": "string" },
+        "schema": {
+          "type": "object",
+          "description": "JSON Schema for complex types"
+        },
+        "example": {}
+      }
+    }
+  }
+}

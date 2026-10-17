@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uapf.dev/schemas/uapf-manifest.schema.json",
+  "title": "UAPF Manifest (uapf.yaml) Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "level",
+    "version",
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "uapf.package"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "includes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/packageRef"
+      },
+      "default": []
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "External package dependencies with version constraints",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(\\^|~|>=|<=|>|<|=)?[0-9]+(\\.[0-9]+)*(\\.[0-9]+)?(-[a-zA-Z0-9.-]+)?(,\\s*(>=|<=|>|<|=)?[0-9]+(\\.[0-9]+)*(\\.[0-9]+)?(-[a-zA-Z0-9.-]+)?)*$|^latest$"
+      },
+      "examples": [
+        {
+          "org.shared.auth": "^1.0.0",
+          "org.shared.logging": ">=2.0.0,<3.0.0"
+        }
+      ]
+    },
+    "cornerstones": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bpmn",
+        "dmn",
+        "cmmn",
+        "resources"
+      ],
+      "properties": {
+        "bpmn": {
+          "type": "boolean"
+        },
+        "dmn": {
+          "type": "boolean"
+        },
+        "cmmn": {
+          "type": "boolean"
+        },
+        "resources": {
+          "type": "boolean"
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bpmn": {
+          "type": "string",
+          "default": "bpmn"
+        },
+        "dmn": {
+          "type": "string",
+          "default": "dmn"
+        },
+        "cmmn": {
+          "type": "string",
+          "default": "cmmn"
+        },
+        "resources": {
+          "type": "string",
+          "default": "resources"
+        },
+        "metadata": {
+          "type": "string",
+          "default": "metadata"
+        },
+        "algorithms": {
+          "type": "string",
+          "default": "algorithms"
+        }
+      }
+    },
+    "exposure": {
+      "type": "object",
+      "description": "Declarative exposure rules for external bindings such as MCP",
+      "properties": {
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "runnable": {
+              "type": "boolean",
+              "description": "Whether this package exposes runnable entrypoints via MCP"
+            },
+            "exposedEntrypoints": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "tool"
+                    ],
+                    "properties": {
+                      "decision": {
+                        "type": "string"
+                      },
+                      "process": {
+                        "type": "string"
+                      },
+                      "tool": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              "description": "Process/decision entrypoints exposed via MCP. Each item is either a bare process/decision id, or an object mapping a decision/process to an explicit MCP tool name."
+            },
+            "exposedArtifacts": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "manifest",
+                  "bpmn",
+                  "dmn",
+                  "cmmn",
+                  "docs",
+                  "tests"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "owners": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/owner"
+      },
+      "minItems": 1
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "review",
+        "approved",
+        "deprecated"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "description": "Optional per-cornerstone artifact inventory carrying role and description metadata. Complements 'paths'; does not replace the cornerstone files themselves.",
+      "additionalProperties": false,
+      "properties": {
+        "bpmn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactEntry"
+          }
+        },
+        "dmn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactEntry"
+          }
+        },
+        "cmmn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactEntry"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactEntry"
+          }
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Logical names of the inputs the process consumes.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "description": "Logical names of the outputs the process produces.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requires_capabilities": {
+      "type": "array",
+      "description": "UAPF-IP host capabilities this package requires, as capability references (e.g. 'ai.redact@1+').",
+      "items": {
+        "type": "string"
+      }
+    },
+    "profiles_supported": {
+      "type": "array",
+      "description": "UAPF-IP integration profiles this package supports (e.g. 'uapf-ip-orchestrated').",
+      "items": {
+        "type": "string"
+      }
+    },
+    "guardrails": {
+      "type": "string",
+      "description": "Path, relative to the package root, to the guardrails file enforced at every capability call (e.g. 'resources/guardrails.yaml')."
+    },
+    "algorithm_cards": {
+      "type": "boolean",
+      "description": "Whether this package contains Algorithm Cards (see chapter 13)."
+    }
+  },
+  "$defs": {
+    "packageRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(\\.\\.?/|package:)[^\\s]+$"
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "team",
+            "person",
+            "role"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contact": {
+          "type": "string"
+        }
+      }
+    },
+    "artifactEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
