@@ -33,7 +33,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/algomation/Power-Automate-UAPF-Converter.git"
+    "url": "https://github.com/Algomation-AI/Power-Automate-UAPF-Converter.git"
   },
   "engines": {
     "node": ">=20"

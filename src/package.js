@@ -143,7 +143,7 @@ function readme(man, s, processes) {
   return `# ${man.name}
 
 UAPF Level-4 package \`${man.id}\`, converted from Power Automate by
-[Power-Automate-UAPF-Converter](https://github.com/algomation/Power-Automate-UAPF-Converter).
+[Power-Automate-UAPF-Converter](https://github.com/Algomation-AI/Power-Automate-UAPF-Converter).
 
 | Process | File |
 |---|---|
