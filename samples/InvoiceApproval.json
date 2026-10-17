@@ -1,0 +1,260 @@
+{
+  "properties": {
+    "displayName": "Invoice approval",
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "When_an_invoice_is_created": {
+          "type": "OpenApiConnection",
+          "recurrence": {
+            "interval": 5,
+            "frequency": "Minute"
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "connectionName": "shared_sharepointonline",
+              "operationId": "GetOnNewItems"
+            },
+            "parameters": {
+              "dataset": "https://contoso.sharepoint.com/sites/finance",
+              "table": "Invoices"
+            }
+          }
+        }
+      },
+      "actions": {
+        "Initialize_threshold": {
+          "type": "InitializeVariable",
+          "runAfter": {},
+          "inputs": {
+            "variables": [
+              {
+                "name": "Threshold",
+                "type": "integer",
+                "value": 5000
+              }
+            ]
+          }
+        },
+        "Check_amount": {
+          "type": "If",
+          "runAfter": {
+            "Initialize_threshold": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "and": [
+              {
+                "greater": [
+                  "@triggerOutputs()?['body/Amount']",
+                  "@variables('Threshold')"
+                ]
+              }
+            ]
+          },
+          "actions": {
+            "Start_and_wait_for_an_approval": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_approvals",
+                  "connectionName": "shared_approvals",
+                  "operationId": "StartAndWaitForAnApproval"
+                },
+                "parameters": {
+                  "approvalType": "Basic",
+                  "WebhookApprovalCreationInput/title": "Approve invoice @{triggerOutputs()?['body/Title']}",
+                  "WebhookApprovalCreationInput/assignedTo": "finance-approvers@contoso.example"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Outcome": {
+              "type": "Switch",
+              "runAfter": {
+                "Start_and_wait_for_an_approval": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@outputs('Start_and_wait_for_an_approval')?['body/outcome']",
+              "cases": {
+                "Approved": {
+                  "case": "Approve",
+                  "actions": {
+                    "Mark_approved": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                          "connectionName": "shared_sharepointonline",
+                          "operationId": "PatchItem"
+                        },
+                        "parameters": {
+                          "dataset": "https://contoso.sharepoint.com/sites/finance",
+                          "table": "Invoices",
+                          "id": "@triggerOutputs()?['body/ID']",
+                          "item/Status": "Approved"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    }
+                  }
+                },
+                "Rejected": {
+                  "case": "Reject",
+                  "actions": {
+                    "Mark_rejected": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                          "connectionName": "shared_sharepointonline",
+                          "operationId": "PatchItem"
+                        },
+                        "parameters": {
+                          "dataset": "https://contoso.sharepoint.com/sites/finance",
+                          "table": "Invoices",
+                          "id": "@triggerOutputs()?['body/ID']",
+                          "item/Status": "Rejected"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    },
+                    "Tell_the_submitter": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {
+                        "Mark_rejected": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                          "connectionName": "shared_office365",
+                          "operationId": "SendEmailV2"
+                        },
+                        "parameters": {
+                          "emailMessage/To": "@triggerOutputs()?['body/Author/Email']",
+                          "emailMessage/Subject": "Invoice rejected",
+                          "emailMessage/Body": "<p>@{outputs('Start_and_wait_for_an_approval')?['body/responses'][0]['comments']}</p>"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "actions": {
+                  "Stop_unknown_outcome": {
+                    "type": "Terminate",
+                    "runAfter": {},
+                    "inputs": {
+                      "runStatus": "Failed",
+                      "runError": {
+                        "message": "Unknown approval outcome"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {
+              "Auto_approve": {
+                "type": "OpenApiConnection",
+                "runAfter": {},
+                "inputs": {
+                  "host": {
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                    "connectionName": "shared_sharepointonline",
+                    "operationId": "PatchItem"
+                  },
+                  "parameters": {
+                    "dataset": "https://contoso.sharepoint.com/sites/finance",
+                    "table": "Invoices",
+                    "id": "@triggerOutputs()?['body/ID']",
+                    "item/Status": "Approved (under threshold)"
+                  },
+                  "authentication": "@parameters('$authentication')"
+                }
+              }
+            }
+          }
+        },
+        "Post_to_accounting_system": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Check_amount": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_contosoerp",
+              "connectionName": "shared_contosoerp",
+              "operationId": "CreateLedgerEntry"
+            },
+            "parameters": {
+              "amount": "@triggerOutputs()?['body/Amount']",
+              "reference": "@triggerOutputs()?['body/Title']"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      }
+    },
+    "connectionReferences": {
+      "shared_sharepointonline": {
+        "api": {
+          "name": "shared_sharepointonline"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_sharepointonline"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_approvals": {
+        "api": {
+          "name": "shared_approvals"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_approvals"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_office365": {
+        "api": {
+          "name": "shared_office365"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_office365"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_contosoerp": {
+        "api": {
+          "name": "shared_contosoerp"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_contosoerp"
+        },
+        "runtimeSource": "embedded"
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}

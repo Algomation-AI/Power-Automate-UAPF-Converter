@@ -1,0 +1,196 @@
+{
+  "properties": {
+    "displayName": "Daily news digest",
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "Weekdays_at_8": {
+          "type": "Recurrence",
+          "recurrence": {
+            "frequency": "Week",
+            "interval": 1,
+            "timeZone": "W. Europe Standard Time",
+            "schedule": {
+              "weekDays": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday"
+              ],
+              "hours": [
+                "8"
+              ],
+              "minutes": [
+                0
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Digest_text": {
+          "type": "InitializeVariable",
+          "runAfter": {},
+          "inputs": {
+            "variables": [
+              {
+                "name": "Digest",
+                "type": "string",
+                "value": ""
+              }
+            ]
+          }
+        },
+        "Attempts": {
+          "type": "InitializeVariable",
+          "runAfter": {
+            "Digest_text": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "variables": [
+              {
+                "name": "Attempts",
+                "type": "integer",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "List_feed_items": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Attempts": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_rss",
+              "connectionName": "shared_rss",
+              "operationId": "ListFeedItems"
+            },
+            "parameters": {
+              "feedUrl": "https://news.example.org/rss",
+              "since": "@{addDays(utcNow(), -1)}"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Only_regulation_news": {
+          "type": "Query",
+          "runAfter": {
+            "List_feed_items": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "from": "@outputs('List_feed_items')?['body']",
+            "where": "@contains(toLower(item()?['title']), 'regulation')"
+          }
+        },
+        "For_each_article": {
+          "type": "Foreach",
+          "runAfter": {
+            "Only_regulation_news": [
+              "Succeeded"
+            ]
+          },
+          "foreach": "@body('Only_regulation_news')",
+          "runtimeConfiguration": {
+            "concurrency": {
+              "repetitions": 5
+            }
+          },
+          "actions": {
+            "Add_line": {
+              "type": "AppendToStringVariable",
+              "runAfter": {},
+              "inputs": {
+                "name": "Digest",
+                "value": "- @{items('For_each_article')?['title']} @{items('For_each_article')?['primaryLink']}\n"
+              }
+            }
+          }
+        },
+        "Retry_until_posted": {
+          "type": "Until",
+          "runAfter": {
+            "For_each_article": [
+              "Succeeded"
+            ]
+          },
+          "expression": "@or(equals(variables('Attempts'), 3), not(empty(outputs('Post_digest')?['body/id'])))",
+          "limit": {
+            "count": 3,
+            "timeout": "PT1H"
+          },
+          "actions": {
+            "Post_digest": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
+                  "connectionName": "shared_teams",
+                  "operationId": "PostMessageToConversation"
+                },
+                "parameters": {
+                  "poster": "Flow bot",
+                  "location": "Channel",
+                  "body/recipient/groupId": "00000000-0000-0000-0000-000000000000",
+                  "body/recipient/channelId": "19:example@thread.tacv2",
+                  "body/messageBody": "@variables('Digest')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Count_attempt": {
+              "type": "IncrementVariable",
+              "runAfter": {
+                "Post_digest": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "inputs": {
+                "name": "Attempts",
+                "value": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "connectionReferences": {
+      "shared_rss": {
+        "api": {
+          "name": "shared_rss"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_rss"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_teams": {
+        "api": {
+          "name": "shared_teams"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_teams"
+        },
+        "runtimeSource": "embedded"
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}

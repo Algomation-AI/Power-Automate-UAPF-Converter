@@ -1,0 +1,253 @@
+{
+  "properties": {
+    "displayName": "Customer request triage",
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "actions": {
+        "Try": {
+          "type": "Scope",
+          "runAfter": {},
+          "actions": {
+            "Classify_request": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "aibuilderpredict_customprompt"
+                },
+                "parameters": {
+                  "recordId": "11111111-2222-3333-4444-555555555555",
+                  "item/requestv2/Text": "@triggerBody()?['text']"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Category": {
+              "type": "Compose",
+              "runAfter": {
+                "Classify_request": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@toLower(trim(outputs('Classify_request')?['body/responsev2/predictionOutput/text']))"
+            },
+            "Route": {
+              "type": "Switch",
+              "runAfter": {
+                "Category": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@outputs('Category')",
+              "cases": {
+                "Complaint": {
+                  "case": "complaint",
+                  "actions": {
+                    "Create_case": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                          "connectionName": "shared_commondataserviceforapps",
+                          "operationId": "CreateRecord"
+                        },
+                        "parameters": {
+                          "entityName": "incidents",
+                          "item/title": "@triggerBody()?['subject']",
+                          "item/description": "@triggerBody()?['text']"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    },
+                    "Notify_support_lead": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {
+                        "Create_case": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams",
+                          "connectionName": "shared_teams",
+                          "operationId": "PostMessageToConversation"
+                        },
+                        "parameters": {
+                          "poster": "Flow bot",
+                          "location": "Chat with Flow bot",
+                          "body/recipient": "lead@contoso.example",
+                          "body/messageBody": "New complaint: @{triggerBody()?['subject']}"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    },
+                    "Acknowledge_customer": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {
+                        "Create_case": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                          "connectionName": "shared_office365",
+                          "operationId": "SendEmailV2"
+                        },
+                        "parameters": {
+                          "emailMessage/To": "@triggerBody()?['email']",
+                          "emailMessage/Subject": "We received your complaint",
+                          "emailMessage/Body": "<p>Case @{outputs('Create_case')?['body/ticketnumber']}</p>"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    }
+                  }
+                },
+                "Order": {
+                  "case": "order",
+                  "actions": {
+                    "Forward_to_sales": {
+                      "type": "Http",
+                      "runAfter": {},
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "https://sales.contoso.example/api/leads",
+                        "body": "@triggerBody()"
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "actions": {
+                  "Log_other": {
+                    "type": "Compose",
+                    "runAfter": {},
+                    "inputs": "Unclassified: @{outputs('Category')}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Catch": {
+          "type": "Scope",
+          "runAfter": {
+            "Try": [
+              "Failed",
+              "TimedOut"
+            ]
+          },
+          "actions": {
+            "Alert_operator": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_flowpush",
+                  "connectionName": "shared_flowpush",
+                  "operationId": "SendEmailNotification"
+                },
+                "parameters": {
+                  "NotificationEmailDefinition": {
+                    "notificationSubject": "Triage failed",
+                    "notificationBody": "@{result('Try')}"
+                  }
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          }
+        },
+        "Respond": {
+          "type": "Response",
+          "runAfter": {
+            "Catch": [
+              "Succeeded",
+              "Skipped"
+            ]
+          },
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 202,
+            "body": {
+              "category": "@outputs('Category')"
+            }
+          }
+        }
+      }
+    },
+    "connectionReferences": {
+      "shared_commondataserviceforapps": {
+        "api": {
+          "name": "shared_commondataserviceforapps"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_commondataserviceforapps"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_teams": {
+        "api": {
+          "name": "shared_teams"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_teams"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_office365": {
+        "api": {
+          "name": "shared_office365"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_office365"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_flowpush": {
+        "api": {
+          "name": "shared_flowpush"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "contoso_shared_flowpush"
+        },
+        "runtimeSource": "embedded"
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}
